@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import ForceGraph3D from 'react-force-graph-3d';
 import * as THREE from 'three';
 
@@ -7,15 +7,20 @@ interface Node {
   name: string;
   file: string;
   line: number;
-  val: number; // Complexity
+  val: number; 
   snippet: string;
-  color?: string;
-  connections?: number; // In-degree
+  author: string;
+  lastModified: string;
+  churnScore: number;
+  inDegree: number;
+  outDegree: number;
+  isGodObject: boolean;
+  isDeadCode: boolean;
 }
 
 interface Link {
-  source: string;
-  target: string;
+  source: string | Node;
+  target: string | Node;
 }
 
 interface GraphData {
@@ -23,205 +28,241 @@ interface GraphData {
   links: Link[];
 }
 
+type ViewMode = 'GALAXY' | 'HEATMAP' | 'BLAST' | 'DEBT';
+
 export default function App() {
   const [data, setData] = useState<GraphData | null>(null);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
-  const [aiAnalysis, setAiAnalysis] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(false);
-  const [apiKey, setApiKey] = useState<string>(localStorage.getItem('DEEPSEEK_API_KEY') || '');
-  const [showSettings, setShowSettings] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('GALAXY');
+  const [blastNodes, setBlastNodes] = useState<Set<string>>(new Set());
+  const [secondaryBlast, setSecondaryBlast] = useState<Set<string>>(new Set());
+  
   const fgRef = useRef<any>();
 
   useEffect(() => {
     fetch('/project_data.json')
       .then(res => res.json())
-      .then(raw => {
-        // Calculate in-degree (connections) for each node to identify hotspots
-        const connections: Record<string, number> = {};
-        raw.links.forEach((l: Link) => {
-          connections[l.target] = (connections[l.target] || 0) + 1;
-        });
-
-        const nodes = raw.nodes.map((n: Node) => ({
-          ...n,
-          connections: connections[n.id] || 0,
-          // If a node is heavily called, make it hot (Red-ish)
-          color: (connections[n.id] || 0) > 3 ? '#ff4d00' : 
-                 (connections[n.id] || 0) > 1 ? '#ffcc00' : '#00d4ff'
-        }));
-
-        setData({ nodes, links: raw.links });
-      });
+      .then(setData);
   }, []);
+
+  // Blast Radius Calculation
+  useEffect(() => {
+    if (viewMode === 'BLAST' && selectedNode && data) {
+      const primary = new Set<string>();
+      const secondary = new Set<string>();
+      
+      // Find what relies on this node (who calls it) - the blast travels UP the call stack
+      data.links.forEach((l: any) => {
+        const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+        const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+        if (targetId === selectedNode.id) primary.add(sourceId);
+      });
+
+      data.links.forEach((l: any) => {
+        const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+        const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+        if (primary.has(targetId)) secondary.add(sourceId);
+      });
+
+      setBlastNodes(primary);
+      setSecondaryBlast(secondary);
+    } else {
+      setBlastNodes(new Set());
+      setSecondaryBlast(new Set());
+    }
+  }, [viewMode, selectedNode, data]);
 
   const handleNodeClick = useCallback((node: any) => {
     setSelectedNode(node);
-    setAiAnalysis('');
-    
-    // Camera aim to node
-    const distance = 100;
+    const distance = 120;
     const distRatio = 1 + distance/Math.hypot(node.x, node.y, node.z);
     fgRef.current.cameraPosition(
       { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio },
       node,
-      2000
+      1500
     );
   }, []);
 
-  const askAI = async () => {
-    if (!selectedNode || !apiKey) {
-      if (!apiKey) setShowSettings(true);
-      return;
-    }
-    
-    setLoading(true);
-    setAiAnalysis('Connecting to DeepSeek Intelligence...');
+  const nodeThreeObject = useCallback((node: any) => {
+    let colorHex = '#00d4ff';
+    let size = Math.sqrt(node.val || 1) * 1.5 + 2;
+    let opacity = 0.9;
+    let emissiveIntensity = 0.5;
 
-    try {
-      const neighbors = data?.links
-        .filter(l => l.source === selectedNode.id || l.target === selectedNode.id)
-        .map(l => l.source === selectedNode.id ? l.target : l.source);
-
-      const prompt = `
-You are an expert Software Architect. Analyze this function in the context of a 3D dependency graph.
-Node ID: ${selectedNode.id}
-File: ${selectedNode.file} (Line ${selectedNode.line})
-Code:
-\`\`\`javascript
-${selectedNode.snippet}
-\`\`\`
-This function is connected to ${neighbors?.length} other components.
-Analyze:
-1. What is the core responsibility of this function?
-2. Are there any architectural risks (tight coupling, high complexity)?
-3. How does this fit into the broader system?
-Give a concise, professional analysis in Markdown.
-      `;
-
-      const response = await fetch('https://api.deepseek.com/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [{ role: 'user', content: prompt }],
-          stream: false
-        })
-      });
-
-      const result = await response.json();
-      if (result.choices && result.choices[0]) {
-        setAiAnalysis(result.choices[0].message.content);
+    if (viewMode === 'HEATMAP') {
+      // Hotter (higher churn) = Red, Colder = Blue
+      const heat = node.churnScore || 0;
+      colorHex = heat > 80 ? '#ff0000' : heat > 50 ? '#ff8800' : heat > 20 ? '#ffff00' : '#0066ff';
+      if (heat > 80) emissiveIntensity = 1.0;
+    } 
+    else if (viewMode === 'DEBT') {
+      if (node.isGodObject) {
+        colorHex = '#ff0055';
+        size = 15; // Massive black hole
+        emissiveIntensity = 0.8;
+      } else if (node.isDeadCode) {
+        colorHex = '#444444';
+        size = 1; // Dust
+        opacity = 0.3;
+        emissiveIntensity = 0.0;
       } else {
-        setAiAnalysis('AI Response Error: Check your API Key or quota.');
+        colorHex = '#225522';
+        opacity = 0.2;
       }
-    } catch (error) {
-      setAiAnalysis('Network Error: Failed to reach DeepSeek API.');
-    } finally {
-      setLoading(false);
     }
-  };
+    else if (viewMode === 'BLAST') {
+      if (selectedNode?.id === node.id) {
+        colorHex = '#ffffff'; // Ground zero
+        size = 8;
+        emissiveIntensity = 1;
+      } else if (blastNodes.has(node.id)) {
+        colorHex = '#ff0000'; // 1st degree burn
+        emissiveIntensity = 0.9;
+      } else if (secondaryBlast.has(node.id)) {
+        colorHex = '#ff8800'; // 2nd degree burn
+        emissiveIntensity = 0.6;
+      } else {
+        colorHex = '#112233'; // Unaffected
+        opacity = 0.2;
+        emissiveIntensity = 0;
+      }
+    } else {
+      // GALAXY Default - Auto color by file, size by incoming connections
+      size += (node.inDegree || 0) * 0.5;
+    }
 
-  const saveApiKey = (key: string) => {
-    setApiKey(key);
-    localStorage.setItem('DEEPSEEK_API_KEY', key);
-    setShowSettings(false);
-  };
-
-  const nodeThreeObject = useMemo(() => (node: any) => {
-    const color = new THREE.Color(node.color);
-    const size = Math.sqrt(node.val || 1) * 2 + 3 + (node.connections * 2);
-    const geometry = new THREE.SphereGeometry(size, 24, 24);
+    const color = new THREE.Color(colorHex);
+    const geometry = new THREE.SphereGeometry(size, 16, 16);
     const material = new THREE.MeshPhongMaterial({
       color: color,
       transparent: true,
-      opacity: 0.9,
+      opacity: opacity,
       shininess: 100,
       emissive: color,
-      emissiveIntensity: 0.6
+      emissiveIntensity: emissiveIntensity
     });
+    
     return new THREE.Mesh(geometry, material);
-  }, []);
+  }, [viewMode, selectedNode, blastNodes, secondaryBlast]);
 
-  if (!data) return <div style={{ color: 'white', padding: 20 }}>Initializing Code Universe...</div>;
+  if (!data) return <div style={{ color: 'white', padding: 20 }}>Initializing Matrix...</div>;
 
   return (
-    <div style={{ width: '100vw', height: '100vh', position: 'relative', background: '#000' }}>
+    <div style={{ width: '100vw', height: '100vh', position: 'relative', background: '#050505', overflow: 'hidden' }}>
       <ForceGraph3D
         ref={fgRef}
         graphData={data}
-        nodeLabel={(node: any) => `<b>${node.name}</b><br/>${node.file}<br/>${node.connections} Incoming Links`}
+        nodeLabel={(node: any) => `
+          <div style="background:rgba(0,0,0,0.8); padding:5px; border-radius:4px; border:1px solid #444;">
+            <b>${node.name}</b><br/>
+            ${node.file}<br/>
+            <span style="color:#aaa">Author: ${node.author}</span><br/>
+            <span style="color:${node.churnScore > 80 ? 'red' : 'green'}">Churn Score: ${node.churnScore}</span>
+          </div>
+        `}
+        nodeAutoColorBy={viewMode === 'GALAXY' ? 'file' : undefined}
         nodeThreeObject={nodeThreeObject}
         onNodeClick={handleNodeClick}
-        linkDirectionalArrowLength={3}
-        linkDirectionalArrowRelPos={1}
-        linkColor={() => 'rgba(255,255,255,0.15)'}
-        linkWidth={0.7}
-        backgroundColor="#000000"
+        linkDirectionalArrowLength={viewMode === 'BLAST' ? 0 : 3}
+        linkColor={(link: any) => {
+          if (viewMode === 'BLAST') {
+            const src = typeof link.source === 'object' ? link.source.id : link.source;
+            const tgt = typeof link.target === 'object' ? link.target.id : link.target;
+            if (tgt === selectedNode?.id) return 'rgba(255,0,0,0.8)';
+            if (blastNodes.has(tgt) && secondaryBlast.has(src)) return 'rgba(255,136,0,0.6)';
+            return 'rgba(255,255,255,0.02)';
+          }
+          return 'rgba(255,255,255,0.1)';
+        }}
+        linkWidth={(link: any) => viewMode === 'BLAST' ? 1 : 0.3}
+        backgroundColor="#050505"
       />
 
-      {/* Futuristic Header */}
-      <div style={{ position: 'absolute', top: 20, left: 20, borderLeft: '4px solid #00d4ff', paddingLeft: 20 }}>
-        <h1 style={{ margin: 0, fontSize: '1.8rem', color: '#fff', letterSpacing: 2 }}>REPO GAZER 2.0</h1>
-        <div style={{ color: '#00d4ff', fontSize: '0.8rem', fontWeight: 'bold' }}>AI ARCHITECT CONNECTED</div>
-        <button 
-          onClick={() => setShowSettings(true)}
-          style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '0.7rem', padding: 0, marginTop: 5, textDecoration: 'underline' }}
-        >⚙ CONFIG API KEY</button>
+      {/* Header */}
+      <div style={{ position: 'absolute', top: 20, left: 20, pointerEvents: 'none' }}>
+        <h1 style={{ margin: 0, fontSize: '2rem', color: '#fff', textShadow: '0 0 10px #00d4ff' }}>REPO GAZER 3.0</h1>
+        <div style={{ color: '#00d4ff', fontSize: '0.9rem', marginTop: 5 }}>THE ULTIMATE CODE INTELLIGENCE</div>
       </div>
 
-      {/* Settings Modal */}
-      {showSettings && (
-        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: '#111', padding: 30, borderRadius: 12, border: '1px solid #333', zIndex: 1000, width: 400 }}>
-          <h3 style={{ color: '#00d4ff', marginTop: 0 }}>API Configuration</h3>
-          <p style={{ color: '#888', fontSize: '0.8rem' }}>Enter your DeepSeek API Key. It will be stored locally in your browser.</p>
-          <input 
-            type="password" 
-            placeholder="sk-..." 
-            defaultValue={apiKey}
-            id="apiKeyInput"
-            style={{ width: '100%', padding: 10, background: '#000', border: '1px solid #444', color: '#fff', borderRadius: 5, marginBottom: 20 }}
-          />
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={() => saveApiKey((document.getElementById('apiKeyInput') as HTMLInputElement).value)} style={{ flex: 1, padding: 10, background: '#00d4ff', border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: 'bold' }}>SAVE KEY</button>
-            <button onClick={() => setShowSettings(false)} style={{ flex: 1, padding: 10, background: '#333', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer' }}>CANCEL</button>
-          </div>
-        </div>
-      )}
+      {/* Mode Switcher HUD */}
+      <div style={{ 
+        position: 'absolute', bottom: 30, left: '50%', transform: 'translateX(-50%)',
+        display: 'flex', gap: 15, background: 'rgba(20,20,25,0.8)', padding: 15, 
+        borderRadius: 30, border: '1px solid #333', backdropFilter: 'blur(10px)'
+      }}>
+        {[
+          { id: 'GALAXY', icon: '🌌', label: 'Default Galaxy' },
+          { id: 'HEATMAP', icon: '🔥', label: 'Git Heatmap' },
+          { id: 'BLAST', icon: '💥', label: 'Blast Radius' },
+          { id: 'DEBT', icon: '🔎', label: 'Tech Debt Radar' }
+        ].map(mode => (
+          <button 
+            key={mode.id}
+            onClick={() => setViewMode(mode.id as ViewMode)}
+            style={{
+              padding: '10px 20px', borderRadius: 20, border: 'none', cursor: 'pointer',
+              fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 8,
+              background: viewMode === mode.id ? '#00d4ff' : '#222',
+              color: viewMode === mode.id ? '#000' : '#fff',
+              transition: 'all 0.3s'
+            }}
+          >
+            <span style={{ fontSize: '1.2rem' }}>{mode.icon}</span> {mode.label}
+          </button>
+        ))}
+      </div>
 
       {/* Sidebar Overlay */}
       {selectedNode && (
         <div style={{ 
-          position: 'absolute', right: 0, top: 0, bottom: 0, width: 480, 
-          background: 'rgba(5, 5, 12, 0.95)', backdropFilter: 'blur(15px)',
-          borderLeft: '2px solid rgba(0, 212, 255, 0.4)', 
-          padding: 30, overflowY: 'auto', color: '#eee', zIndex: 100
+          position: 'absolute', right: 0, top: 0, bottom: 0, width: 400, 
+          background: 'rgba(10, 10, 15, 0.95)', borderLeft: '1px solid #333', 
+          padding: 30, overflowY: 'auto', color: '#eee'
         }}>
-          <button onClick={() => setSelectedNode(null)} style={{ float: 'right', background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 24 }}>✕</button>
-          <h2 style={{ color: '#fff', fontSize: '2.2rem', margin: '15px 0 5px 0' }}>{selectedNode.name}</h2>
-          <div style={{ display: 'flex', gap: 10, marginBottom: 25 }}>
-            <span style={{ background: '#222', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem' }}>{selectedNode.file}</span>
-            <span style={{ background: '#004466', color: '#00d4ff', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 'bold' }}>{selectedNode.connections} USAGES</span>
-          </div>
+          <button onClick={() => setSelectedNode(null)} style={{ float: 'right', background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: 20 }}>✕</button>
           
-          <pre style={{ background: '#000', padding: 20, borderRadius: 10, fontSize: '0.85rem', border: '1px solid #222', color: '#fff', overflowX: 'auto' }}>
+          <h2 style={{ color: '#00d4ff', fontSize: '1.8rem', margin: '10px 0' }}>{selectedNode.name}</h2>
+          <p style={{ margin: 0, color: '#aaa', fontSize: '0.9rem' }}>{selectedNode.file} (Line {selectedNode.line})</p>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, margin: '20px 0' }}>
+            <div style={{ background: '#111', padding: 10, borderRadius: 8, border: '1px solid #222' }}>
+              <div style={{ fontSize: '0.7rem', color: '#666' }}>AUTHOR</div>
+              <div style={{ fontWeight: 'bold' }}>{selectedNode.author}</div>
+            </div>
+            <div style={{ background: '#111', padding: 10, borderRadius: 8, border: '1px solid #222' }}>
+              <div style={{ fontSize: '0.7rem', color: '#666' }}>CHURN SCORE (0-100)</div>
+              <div style={{ fontWeight: 'bold', color: selectedNode.churnScore > 80 ? '#ff4444' : '#44ff44' }}>{selectedNode.churnScore}</div>
+            </div>
+            <div style={{ background: '#111', padding: 10, borderRadius: 8, border: '1px solid #222' }}>
+              <div style={{ fontSize: '0.7rem', color: '#666' }}>IN-DEGREE (CALLED BY)</div>
+              <div style={{ fontWeight: 'bold' }}>{selectedNode.inDegree}</div>
+            </div>
+            <div style={{ background: '#111', padding: 10, borderRadius: 8, border: '1px solid #222' }}>
+              <div style={{ fontSize: '0.7rem', color: '#666' }}>OUT-DEGREE (CALLS)</div>
+              <div style={{ fontWeight: 'bold' }}>{selectedNode.outDegree}</div>
+            </div>
+          </div>
+
+          {selectedNode.isGodObject && (
+            <div style={{ background: 'rgba(255,0,0,0.1)', borderLeft: '4px solid red', padding: 10, marginBottom: 20, color: '#ffaaaa' }}>
+              ⚠️ <b>God Object Detected:</b> This function has excessive complexity or dependencies. High refactoring priority.
+            </div>
+          )}
+          {selectedNode.isDeadCode && (
+            <div style={{ background: 'rgba(100,100,100,0.2)', borderLeft: '4px solid gray', padding: 10, marginBottom: 20, color: '#aaaaaa' }}>
+              ⚰️ <b>Dead Code Detected:</b> This function is never called within the analyzed scope.
+            </div>
+          )}
+
+          <h4 style={{ color: '#888', marginTop: 20 }}>Source Snippet</h4>
+          <pre style={{ background: '#000', padding: 15, borderRadius: 8, fontSize: '0.8rem', overflowX: 'auto', border: '1px solid #222' }}>
             <code>{selectedNode.snippet}</code>
           </pre>
-
-          <button onClick={askAI} disabled={loading} style={{ 
-            width: '100%', padding: 18, marginTop: 30,
-            background: 'linear-gradient(135deg, #00d4ff 0%, #007799 100%)', color: '#000', 
-            fontWeight: 'bold', border: 'none', borderRadius: 8, cursor: 'pointer',
-            fontSize: '1rem', boxShadow: '0 5px 15px rgba(0, 212, 255, 0.3)'
-          }}>
-            {loading ? 'AI AGENT REASONING...' : '✨ ASK DEEPSEEK ARCHITECT'}
-          </button>
-
-          {aiAnalysis && (
-            <div style={{ marginTop: 30, padding: 25, background: 'rgba(0, 212, 255, 0.08)', borderRadius: 12, border: '1px solid rgba(0, 212, 255, 0.3)', lineHeight: '1.8', fontSize: '1rem', color: '#ddd' }}>
-               <div dangerouslySetInnerHTML={{ __html: aiAnalysis.replace(/\n/g, '<br/>') }} />
+          
+          {viewMode === 'BLAST' && (
+            <div style={{ marginTop: 20, padding: 15, background: 'rgba(255, 136, 0, 0.1)', borderRadius: 8, border: '1px solid rgba(255, 136, 0, 0.3)' }}>
+              <h4 style={{ margin: '0 0 10px 0', color: '#ff8800' }}>💥 Blast Radius Impact</h4>
+              <p style={{ margin: 0, fontSize: '0.9rem' }}>Modifying this node will directly impact <b>{blastNodes.size}</b> functions (1st degree) and indirectly impact <b>{secondaryBlast.size}</b> functions (2nd degree).</p>
             </div>
           )}
         </div>

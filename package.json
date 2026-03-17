@@ -13,6 +13,7 @@
   "type": "module",
   "dependencies": {
     "glob": "^13.0.6",
+    "simple-git": "^3.33.0",
     "typescript": "^5.9.3",
     "web-tree-sitter": "^0.26.7"
   }
