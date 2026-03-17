@@ -61,6 +61,18 @@ Open `http://localhost:5173` to explore your code.
 
 ---
 
+## 📊 Case Study: The "Archer" Project Galaxy
+We tested RepoGazer 3.0 on a real-world Unity project (**Archer**). Here is what the intelligence engine discovered:
+
+- **Mapped Stars:** 883 (Functions & Methods)
+- **Gravitational Links:** 3,970 (Call Relationships)
+- **Hotspots Detected:** 
+    - `UIManager.Awake`: **High Churn Score (95)** - Heavily modified in the last 48 hours.
+    - `GameManager.Awake`: **God Object Detected** (103 outbound connections) - Core central controller.
+- **Blast Radius:** Modifying `ObjectPoolManager.GetArrow` impacts **12 directly dependent** methods and **45 indirectly linked** logic paths.
+
+---
+
 ## 🗺️ Roadmap
 - [ ] **Git Time-Lapse:** Animate the evolution of your galaxy over years.
 - [ ] **AI Architect Integration:** DeepSeek/Claude API for real-time refactoring suggestions.
