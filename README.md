@@ -1,49 +1,52 @@
-# 🌌 RepoGazer 3.1: Visual Code Intelligence
-> **"Stop reading code lines. Start gazing at your code galaxy."**
+# 🌌 RepoGazer 8.1: Structural Health Radar
+> **"Don't just look at your code. Diagnose its architectural soul."**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub Stars](https://img.shields.io/github/stars/mmporong/repogazer.svg?style=social)](https://github.com/mmporong/repogazer)
 
-RepoGazer is a next-generation 3D codebase visualizer and architectural intelligence engine. It transforms your messy, complex repository into an interactive 3D universe, allowing you to trace bug impacts, identify technical debt, and see code ownership in a beautiful neon galaxy.
+RepoGazer is a next-generation **3D Architectural Intelligence Engine**. It transforms your complex codebase into a vivid, interactive 3D universe where nodes aren't just points—they are data-rich "Stellar Units" that reveal the structural health, risks, and hidden patterns of your software.
 
 ---
 
-## 📸 Demo & Screenshots
+## 📸 Cinematic Diagnostics
 
-![Main Galaxy View](https://via.placeholder.com/1200x600?text=RepoGazer+Galaxy+View+Placeholder)
-*The 3D Neon Galaxy: Nodes represent functions, sized by complexity.*
-
-![Blast Radius Simulation](https://via.placeholder.com/600x400?text=Blast+Radius+View) ![Debt Radar](https://via.placeholder.com/600x400?text=Debt+Radar+View)
-*Left: Impact analysis of a code change. Right: Detecting God Objects and Dead Code.*
+![Vivid Galaxy View](https://via.placeholder.com/1200x600?text=RepoGazer+v8.1+Vivid+Corona+View+Placeholder)
+*The **Deep Space Corona** System: Nodes represent functions, colored by importance and halos by risk.*
 
 ---
 
-## 🚀 The 4 Pillars of Intelligence
+## 🚀 The 3 Pillars of Actionable Intelligence
 
-### 🌌 1. Code Galaxy (Default)
-Visualizes your entire project as a 3D constellation. Nodes are functions/methods, and edges are call relationships.
-- **Neon Cluster Coloring:** Files are automatically grouped by unique neon palettes.
-- **Dynamic Sizing:** Important "Hub" functions grow larger as more modules depend on them.
+### 🔴 1. Circular Dependency Detector (CYCLES)
+Find the "Cancer Cells" of your architecture. RepoGazer identifies `A -> B -> C -> A` call loops that cause memory leaks and compilation hell.
+- **Visual Alert:** Cycle participants glow with a **Red Aura** and a **⚠ Warning Marker**.
+- **Actionable Fix:** The sidebar tells you exactly which dependency to break to resolve the loop.
 
-### 🔥 2. Git Blame Heatmap
-Instantly see which parts of your code are "Hot" (frequently modified) vs "Cold" (stable/stale). 
-- **Lava Nodes:** High churn areas prone to bugs.
-- **Author Tracking:** Identify who owns which sector of the codebase.
+### 🟣 2. Code Clone Radar (CLONES)
+Instantly spot "Copy-Paste" logic across your entire repository.
+- **Visual Alert:** Identical implementations are linked by **Purple Glow** and **❐ Clone Icons**.
+- **Actionable Fix:** Identifies specific files to target for "Extract to Shared Utility" refactoring.
 
-### 💥 3. The Blast Radius (Impact Analysis)
-Click any node to simulate a "Bug Explosion". RepoGazer will highlight every function that depends on that node, directly or indirectly. 
+### 🔎 3. Tech Debt & God Object Scanner (DEBT)
+High-fidelity detection of architectural anomalies.
+- **God Objects:** Massive entities with excessive outbound coupling.
+- **Dead Code:** Unreachable functions drifting as "Moonlight Silver" space dust.
+- **Pain Score:** A unique metric calculating `Complexity (Lines) × Volatility (Git Churn)` to prioritize your refactoring efforts.
 
-### 🔎 4. Tech Debt Radar
-Detects architectural anomalies using gravitational algorithms.
-- **God Objects (Black Holes):** Massive, tightly coupled functions.
-- **Dead Code (Space Dust):** Isolated, unreachable code drifting at the edges.
+---
+
+## 🎨 Aesthetic: Deep Space Corona
+RepoGazer v8.1 features our most advanced 3D rendering engine yet:
+- **True Stellar Spectrum:** Star colors based on scientific classification (Class O Blue to Moonlight Silver).
+- **Corona Halos:** Dynamic light-scattering effects that indicate Git Churn levels.
+- **Volumetric Depth:** 3D collision physics ensuring every "Star" has its own breathing room.
 
 ---
 
 ## 🛠️ Quick Start
 
-### 1. Backend: Analysis
-Analyze your project and generate the data matrix.
+### 1. Analysis (Backend)
+Analyze your project and generate the intelligence matrix.
 ```bash
 # Clone and Install
 git clone https://github.com/mmporong/repogazer.git
@@ -53,24 +56,24 @@ npm install
 # Parse any project (Unity C#, JS, TS)
 node core/index.js <path_to_your_project>
 
-# Copy data to web viewer
+# Sync data to viewer
 cp project_data.json web/public/
 ```
 
-### 2. Frontend: Visualization
+### 2. Exploration (Frontend)
 ```bash
 cd web
 npm install
 npm run dev
 ```
-Open `http://localhost:5173` to explore your code.
+Open `http://localhost:5173` to start your architectural mission.
 
 ---
 
 ## 🗺️ Roadmap
-- [ ] **Git Time-Lapse:** Animate the evolution of your galaxy over time.
-- [ ] **AI Refactor Suggestions:** Direct integration with Gemini/Claude for one-click fixes.
-- [ ] **VR Support:** Walk through your galaxy in Meta Quest 3.
+- [ ] **AI Auto-Sururgeon:** One-click automated refactoring via Gemini API (Preview in v7.0).
+- [ ] **Layer Breach Detection:** Custom rules to prevent illegal cross-module references.
+- [ ] **VR Combat Mode:** "Shoot" down technical debt in a VR-immersion environment.
 
 ---
-Developed with ❤️ by [mmporong](https://github.com/mmporong) 🌠
+Developed with 💎 by [mmporong](https://github.com/mmporong) 🌠

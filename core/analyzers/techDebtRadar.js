@@ -1,3 +1,8 @@
+/**
+ * ARCHITECTURAL DIAGNOSTIC ENGINE (v8.0)
+ * Focuses on purely deterministic technical debt without AI.
+ */
+
 export function calculateTechDebt(nodes, links) {
   // 1. Calculate In-degree and Out-degree
   links.forEach(link => {
@@ -7,31 +12,69 @@ export function calculateTechDebt(nodes, links) {
     if (targetNode) targetNode.inDegree++;
   });
 
-  // 2. Identify Architectural Anti-Patterns & Behavioral Analysis
+  // 2. CIRCULAR DEPENDENCY DETECTION (Tarjan's or simple DFS)
+  // Finds nodes that participate in a cycle (A -> B -> A or A -> B -> C -> A)
+  const visited = new Set();
+  const recStack = new Set();
+  const circularNodes = new Set();
+
+  function findCycles(nodeId, path = []) {
+    visited.add(nodeId);
+    recStack.add(nodeId);
+    path.push(nodeId);
+
+    const neighbors = links.filter(l => l.source === nodeId).map(l => l.target);
+    for (const neighbor of neighbors) {
+      if (!visited.has(neighbor)) {
+        findCycles(neighbor, [...path]);
+      } else if (recStack.has(neighbor)) {
+        // Cycle found! Mark all nodes in the path from 'neighbor' onwards
+        const cycleStartIndex = path.indexOf(neighbor);
+        if (cycleStartIndex !== -1) {
+          for (let i = cycleStartIndex; i < path.length; i++) {
+            circularNodes.add(path[i]);
+          }
+        }
+      }
+    }
+    recStack.delete(nodeId);
+  }
+
   nodes.forEach(n => {
-    // Pain Score: Complexity (Lines) * Churn (Risk)
-    // 0 to ~10,000+
-    n.painScore = (n.val || 10) * (n.churnScore || 0);
+    if (!visited.has(n.id)) findCycles(n.id);
+  });
 
-    n.issues = []; // List of specific, actionable strings
-
-    // God Object: Has too many outbound dependencies or is extremely long
-    if (n.outDegree > 15 || n.val > 300) {
-      n.isGodObject = true;
-      n.issues.push(`Massive Entity: ${n.val} lines and ${n.outDegree} external calls. Action: Extract classes or apply Single Responsibility Principle.`);
+  // 3. CODE CLONE DETECTION (Simplified via Snippet Hashing)
+  // Identifies duplicate logic across different files
+  const snippetMap = new Map();
+  nodes.forEach(n => {
+    if (n.snippet && n.snippet.length > 50) {
+        // Normalize snippet: remove whitespace and comments for better matching
+        const normalized = n.snippet.replace(/\s+/g, '').replace(/\/\/.*|\/\*[\s\S]*?\*\//g, '');
+        if (!snippetMap.has(normalized)) {
+            snippetMap.set(normalized, []);
+        }
+        snippetMap.get(normalized).push(n.id);
     }
+  });
+
+  // 4. Inject Diagnostic Data into Nodes
+  nodes.forEach(n => {
+    n.isCircular = circularNodes.has(n.id);
+    n.cloneIds = [];
     
-    // High Pain Score
-    if (n.painScore > 5000) {
-        n.issues.push(`Volatility Danger: Highly complex logic modified frequently (${n.churnScore}% churn). Action: Write unit tests to lock down behavior, then simplify.`);
+    // Find clones
+    const normalized = n.snippet ? n.snippet.replace(/\s+/g, '').replace(/\/\/.*|\/\*[\s\S]*?\*\//g, '') : "";
+    if (snippetMap.has(normalized) && snippetMap.get(normalized).length > 1) {
+        n.cloneIds = snippetMap.get(normalized).filter(id => id !== n.id);
     }
 
-    // Dead Code: No incoming links, and not a standard entry point
-    const entryPoints = ['Start', 'Update', 'Awake', 'main', 'OnEnable', 'OnDisable'];
-    if (n.inDegree === 0 && !entryPoints.includes(n.name) && n.name !== 'Global') {
-      n.isDeadCode = true;
-      n.issues.push("Unreachable Code: 0 incoming calls. Action: Safe to delete to reduce build size.");
-    }
+    n.diagnostics = [];
+    if (n.isCircular) n.diagnostics.push("🔴 CIRCULAR DEPENDENCY: This node is part of a call loop. Refactor to break the cycle.");
+    if (n.cloneIds.length > 0) n.diagnostics.push(`🟣 CODE CLONE: ${n.cloneIds.length} other functions have identical implementation. Extract to shared utility.`);
+    if (n.outDegree > 15) n.diagnostics.push("⚠️ GOD OBJECT: High outbound coupling. Violates Single Responsibility Principle.");
+    if (n.inDegree === 0 && !['Start', 'Update', 'Awake'].includes(n.name)) n.isDeadCode = true;
+    if (n.isDeadCode) n.diagnostics.push("💀 DEAD CODE: Unreachable from analyzed paths. Safe to delete.");
   });
 
   return nodes;
