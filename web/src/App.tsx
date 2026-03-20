@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import ForceGraph3D from 'react-force-graph-3d';
 import * as THREE from 'three';
 
@@ -16,6 +16,8 @@ interface Node {
   outDegree: number;
   isGodObject: boolean;
   isDeadCode: boolean;
+  color?: string;
+  size?: number; 
 }
 
 interface Link {
@@ -30,11 +32,59 @@ interface GraphData {
 
 type ViewMode = 'GALAXY' | 'HEATMAP' | 'BLAST' | 'DEBT';
 
-// Predefined Neon Palette for Galaxy Clusters
-const NEON_PALETTE = [
-  '#00d4ff', '#ff00ff', '#ffff00', '#00ff00', '#ff4d00', 
-  '#bd00ff', '#00ffcc', '#ff0055', '#aaff00', '#0055ff'
+// Deep Space Nebula Palette (Researched)
+const NEBULA_PALETTE = [
+  '#AC3AF2', // Cosmic Purple
+  '#8CBDF8', // Nimbus Blue
+  '#FF5BD3', // Neon Pink (Bloom)
+  '#7EF0C1', // Mint Glow
+  '#6E55D7', // Astral Violet
+  '#1B8E7D'  // Seafoam Nebula
 ];
+
+// Cache for generated gradient textures to save memory
+const textureCache: Record<string, THREE.CanvasTexture> = {};
+
+// Generator for True Gradient Nebula Stars
+const getGlowTexture = (colorHex: string, mode: ViewMode = 'GALAXY') => {
+  const cacheKey = `${colorHex}_${mode}`;
+  if (textureCache[cacheKey]) return textureCache[cacheKey];
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  
+  if (ctx) {
+    // Radial Gradient: Center -> Edge
+    const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    
+    if (mode === 'DEBT') {
+        gradient.addColorStop(0, '#ffffff');
+        gradient.addColorStop(0.3, colorHex);
+        gradient.addColorStop(1, 'rgba(0,0,0,0)');
+    } else {
+        gradient.addColorStop(0, '#ffffff'); // Super hot white core
+        gradient.addColorStop(0.15, '#ffffff'); // Keep core solid
+        gradient.addColorStop(0.4, colorHex);  // Primary color transition
+        
+        // Convert Hex to RGBA for smooth transparent fade
+        const hex = colorHex.replace('#', '');
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+        gradient.addColorStop(0.7, `rgba(${r},${g},${b},0.3)`);
+        gradient.addColorStop(1, 'rgba(0,0,0,0)');
+    }
+
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 64, 64);
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  textureCache[cacheKey] = texture;
+  return texture;
+};
 
 export default function App() {
   const [data, setData] = useState<GraphData | null>(null);
@@ -49,26 +99,49 @@ export default function App() {
     fetch('/project_data.json')
       .then(res => res.json())
       .then(raw => {
-        // Assign vivid palette colors to files
         const fileColors: Record<string, string> = {};
         let colorIdx = 0;
         raw.nodes.forEach((n: Node) => {
-          if (!fileColors[n.file]) {
-            fileColors[n.file] = NEON_PALETTE[colorIdx % NEON_PALETTE.length];
+          const folder = n.file.split('/')[0];
+          if (!fileColors[folder]) {
+            fileColors[folder] = NEBULA_PALETTE[colorIdx % NEBULA_PALETTE.length];
             colorIdx++;
           }
         });
 
-        const nodes = raw.nodes.map((n: Node) => ({
-          ...n,
-          color: fileColors[n.file]
-        }));
+        const nodes = raw.nodes.map((n: Node) => {
+          // Adjust size scale for Sprites (Sprites look smaller than geometries)
+          const baseSize = Math.sqrt(n.val || 1) * 3 + 15; 
+          const importanceSize = (n.inDegree || 0) * 2.5;
+          return {
+            ...n,
+            color: fileColors[n.file.split('/')[0]],
+            size: baseSize + importanceSize
+          };
+        });
 
         setData({ nodes, links: raw.links });
-      });
+      })
+      .catch(err => console.error("Failed to load galaxy data:", err));
   }, []);
 
-  // Blast Radius Logic
+  // Update physics safely after data loads
+  useEffect(() => {
+    if (fgRef.current && data) {
+      setTimeout(() => {
+        const linkForce = fgRef.current.d3Force('link');
+        if (linkForce) linkForce.distance(180).iterations(2);
+        
+        const chargeForce = fgRef.current.d3Force('charge');
+        if (chargeForce) chargeForce.strength(-600); // Strong repulsion
+
+        // Keep them from totally overlapping, but allow outer glow to mix
+        fgRef.current.d3Force('collide', (node: any) => (node.size || 10) * 0.5);
+      }, 100);
+    }
+  }, [data]);
+
+  // Blast Radius Calculation
   useEffect(() => {
     if (viewMode === 'BLAST' && selectedNode && data) {
       const primary = new Set<string>();
@@ -93,74 +166,75 @@ export default function App() {
 
   const handleNodeClick = useCallback((node: any) => {
     setSelectedNode(node);
-    const distance = 150;
+    const distance = 300;
     const distRatio = 1 + distance/Math.hypot(node.x, node.y, node.z);
     fgRef.current.cameraPosition(
       { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio },
       node,
-      1200
+      1500
     );
   }, []);
 
+  // GRADIENT STAR SPRITE CREATION (The Kick)
   const nodeThreeObject = useCallback((node: any) => {
-    let colorHex = node.color || '#00d4ff';
-    let size = Math.sqrt(node.val || 1) * 1.2 + 2;
-    let opacity = 0.8;
-    let emissiveIntensity = 0.4;
+    let colorHex = node.color || '#8CBDF8';
+    let size = node.size || 15;
+    let opacity = 1.0;
 
     if (viewMode === 'HEATMAP') {
       const heat = node.churnScore || 0;
-      colorHex = heat > 80 ? '#ff0033' : heat > 50 ? '#ffcc00' : heat > 20 ? '#00ffcc' : '#3366ff';
-      emissiveIntensity = heat / 100 + 0.2;
+      // Thermal Gradient
+      colorHex = heat > 80 ? '#ffffff' : heat > 50 ? '#ffcc00' : heat > 20 ? '#ff0055' : '#0a1a3a';
+      if (heat <= 20) opacity = 0.2;
     } 
     else if (viewMode === 'DEBT') {
-      if (node.isGodObject) { colorHex = '#ff0055'; size = 18; emissiveIntensity = 1.0; }
-      else if (node.isDeadCode) { colorHex = '#444444'; size = 1.5; opacity = 0.2; }
-      else { colorHex = '#113311'; opacity = 0.1; }
+      if (node.isGodObject) { colorHex = '#ff0000'; size *= 1.5; }
+      else if (node.isDeadCode) { colorHex = '#666666'; opacity = 0.5; size = 10; }
+      else { colorHex = '#051105'; opacity = 0.0; } // Hide healthy nodes
     }
     else if (viewMode === 'BLAST') {
-      if (selectedNode?.id === node.id) { colorHex = '#ffffff'; size = 10; emissiveIntensity = 1.5; }
-      else if (blastNodes.has(node.id)) { colorHex = '#ff0000'; emissiveIntensity = 1.0; }
-      else if (secondaryBlast.has(node.id)) { colorHex = '#ffaa00'; emissiveIntensity = 0.7; }
-      else { colorHex = '#0a1122'; opacity = 0.1; emissiveIntensity = 0; }
-    } else {
-      // Default Galaxy: Size by importance
-      size += (node.inDegree || 0) * 0.8;
+      if (selectedNode?.id === node.id) { colorHex = '#ffffff'; size *= 1.5; }
+      else if (blastNodes.has(node.id)) { colorHex = '#ff0000'; }
+      else if (secondaryBlast.has(node.id)) { colorHex = '#ffaa00'; }
+      else { colorHex = '#000000'; opacity = 0.0; } // Hide unaffected
     }
 
-    const color = new THREE.Color(colorHex);
-    const geometry = new THREE.SphereGeometry(size, 20, 20);
-    const material = new THREE.MeshPhongMaterial({
-      color: color,
+    const material = new THREE.SpriteMaterial({
+      map: getGlowTexture(colorHex, viewMode),
+      color: 0xffffff,
       transparent: true,
       opacity: opacity,
-      shininess: 100,
-      emissive: color,
-      emissiveIntensity: emissiveIntensity
+      blending: THREE.AdditiveBlending, // This makes overlapping colors mix like light
+      depthWrite: false // Prevents sorting artifacts with transparency
     });
     
-    return new THREE.Mesh(geometry, material);
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(size, size, 1);
+    
+    return sprite;
   }, [viewMode, selectedNode, blastNodes, secondaryBlast]);
 
-  if (!data) return <div style={{ color: 'white', padding: 20 }}>Booting Galaxy Core...</div>;
+  if (!data) return <div style={{ color: 'white', padding: 40, fontFamily: 'monospace', fontSize: '1.2rem' }}>⭐ IGNITING DEEP SPACE...</div>;
 
   return (
-    <div style={{ width: '100vw', height: '100vh', position: 'relative', background: '#000005', overflow: 'hidden' }}>
+    <div style={{ width: '100vw', height: '100vh', position: 'relative', background: '#020205', overflow: 'hidden' }}>
       <ForceGraph3D
         ref={fgRef}
         graphData={data}
         nodeLabel={(node: any) => `
-          <div style="background:rgba(0,0,0,0.9); padding:8px; border-radius:6px; border:1px solid ${node.color}; color:white; font-family:monospace;">
-            <b style="color:${node.color}">${node.name}</b><br/>
-            <span style="font-size:0.8rem; opacity:0.7">${node.file}</span><br/>
-            <hr style="border:0; border-top:1px solid #333; margin:5px 0;"/>
-            <span>Owner: ${node.author}</span><br/>
-            <span>Impact: ${node.inDegree} callers</span>
+          <div style="background:rgba(5, 5, 10, 0.95); padding:15px; border-radius:8px; border:1px solid ${node.color}; color:white; font-family:'Segoe UI', sans-serif; box-shadow: 0 0 20px ${node.color}44;">
+            <b style="color:${node.color}; font-size:1.1rem;">${node.name}</b><br/>
+            <span style="font-size:0.85rem; opacity:0.6">${node.file}</span><br/>
+            <div style="height:1px; background:#333; margin:8px 0;"></div>
+            <div style="display:flex; justify-content:space-between; gap:20px; font-size:0.8rem;">
+              <span>OWNER: <b>${node.author}</b></span>
+              <span>IMPACT: <b>${node.inDegree}</b></span>
+            </div>
           </div>
         `}
         nodeThreeObject={nodeThreeObject}
         onNodeClick={handleNodeClick}
-        linkDirectionalArrowLength={viewMode === 'BLAST' ? 0 : 3.5}
+        linkDirectionalArrowLength={viewMode === 'BLAST' ? 0 : 5}
         linkDirectionalArrowRelPos={1}
         linkColor={(link: any) => {
           if (viewMode === 'BLAST') {
@@ -168,98 +242,83 @@ export default function App() {
             const src = typeof link.source === 'object' ? link.source.id : link.source;
             if (tgt === selectedNode?.id) return '#ff0000';
             if (blastNodes.has(tgt) && secondaryBlast.has(src)) return '#ffaa00';
-            return 'rgba(255,255,255,0.01)';
+            return 'rgba(0,0,0,0)';
           }
-          return 'rgba(255,255,255,0.08)';
+          return 'rgba(140, 189, 248, 0.05)'; // Deep space link color
         }}
-        linkWidth={(link: any) => viewMode === 'BLAST' ? 1.5 : 0.5}
-        backgroundColor="#000005"
-        d3AlphaDecay={0.02}
-        d3VelocityDecay={0.3}
-        // Force nodes further apart to avoid clumping
-        cooldownTicks={100}
-        onEngineStop={() => console.log("Engine Stabilized")}
+        linkWidth={(link: any) => viewMode === 'BLAST' ? 2 : 0.6}
+        backgroundColor="#020205"
+        d3AlphaDecay={0.01}
+        d3VelocityDecay={0.2}
       />
 
-      {/* Futuristic HUD */}
-      <div style={{ position: 'absolute', top: 30, left: 30, pointerEvents: 'none', borderLeft: '3px solid #00d4ff', paddingLeft: 20 }}>
-        <h1 style={{ margin: 0, fontSize: '2.2rem', color: '#fff', letterSpacing: 4, fontWeight: 900 }}>REPO GAZER</h1>
-        <div style={{ color: '#00d4ff', fontSize: '0.8rem', fontWeight: 'bold', letterSpacing: 2 }}>ARCHITECTURAL INTELLIGENCE ACTIVE</div>
+      {/* Header HUD */}
+      <div style={{ position: 'absolute', top: 30, left: 30, pointerEvents: 'none', borderLeft: '4px solid #AC3AF2', paddingLeft: 20 }}>
+        <h1 style={{ margin: 0, fontSize: '2.5rem', color: '#fff', letterSpacing: 8, fontWeight: 900 }}>REPO GAZER</h1>
+        <div style={{ color: '#AC3AF2', fontSize: '0.8rem', fontWeight: 'bold', letterSpacing: 4 }}>DEEP SPACE EDITION v4.0</div>
       </div>
 
-      {/* Mode Controls */}
+      {/* Mode Switcher */}
       <div style={{ 
         position: 'absolute', bottom: 40, left: '50%', transform: 'translateX(-50%)',
-        display: 'flex', gap: 12, background: 'rgba(5, 5, 10, 0.85)', padding: '12px 25px', 
-        borderRadius: 40, border: '1px solid #333', backdropFilter: 'blur(12px)', boxShadow: '0 0 30px rgba(0,0,0,0.8)'
+        display: 'flex', gap: 15, background: 'rgba(10, 10, 15, 0.95)', padding: '12px 25px', 
+        borderRadius: 15, border: '1px solid #333', backdropFilter: 'blur(15px)', boxShadow: '0 20px 40px rgba(0,0,0,0.8)'
       }}>
         {[
-          { id: 'GALAXY', icon: '🌌', label: 'Galaxy' },
-          { id: 'HEATMAP', icon: '🔥', label: 'Heatmap' },
-          { id: 'BLAST', icon: '💥', label: 'Blast' },
-          { id: 'DEBT', icon: '🔎', label: 'Debt' }
+          { id: 'GALAXY', label: 'NEBULA MAP' },
+          { id: 'HEATMAP', label: 'THERMAL' },
+          { id: 'BLAST', label: 'IMPACT' },
+          { id: 'DEBT', label: 'DEBT' }
         ].map(mode => (
           <button 
             key={mode.id}
             onClick={() => setViewMode(mode.id as ViewMode)}
             style={{
-              padding: '10px 22px', borderRadius: 25, border: 'none', cursor: 'pointer',
-              fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.9rem',
-              background: viewMode === mode.id ? 'linear-gradient(135deg, #00d4ff, #0055ff)' : 'transparent',
-              color: viewMode === mode.id ? '#000' : '#888',
-              transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-              transform: viewMode === mode.id ? 'scale(1.1)' : 'scale(1)'
+              padding: '10px 25px', borderRadius: 8, border: 'none', cursor: 'pointer',
+              fontWeight: 900, fontSize: '0.85rem', letterSpacing: 2,
+              background: viewMode === mode.id ? '#AC3AF2' : 'transparent',
+              color: viewMode === mode.id ? '#fff' : '#6E55D7',
+              transition: 'all 0.3s ease'
             }}
           >
-            <span>{mode.icon}</span> {mode.label}
+            {mode.label}
           </button>
         ))}
       </div>
 
-      {/* Node Info Sidebar */}
+      {/* Sidebar */}
       {selectedNode && (
         <div style={{ 
           position: 'absolute', right: 0, top: 0, bottom: 0, width: 450, 
-          background: 'rgba(2, 2, 5, 0.96)', borderLeft: '1px solid #222', 
-          padding: 40, overflowY: 'auto', color: '#fff', zIndex: 100,
-          boxShadow: '-20px 0 50px rgba(0,0,0,0.9)'
+          background: 'rgba(5, 5, 10, 0.98)', borderLeft: '1px solid #222', 
+          padding: 50, overflowY: 'auto', color: '#fff', zIndex: 100,
+          boxShadow: '-30px 0 60px rgba(0,0,0,0.9)'
         }}>
-          <button onClick={() => setSelectedNode(null)} style={{ float: 'right', background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 28 }}>✕</button>
+          <button onClick={() => setSelectedNode(null)} style={{ float: 'right', background: 'none', border: 'none', color: '#444', cursor: 'pointer', fontSize: 32 }}>✕</button>
           
-          <h2 style={{ color: selectedNode.color, fontSize: '2.4rem', margin: '10px 0', fontWeight: 900 }}>{selectedNode.name}</h2>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 30 }}>
-            <span style={{ border: `1px solid ${selectedNode.color}`, color: selectedNode.color, padding: '4px 12px', borderRadius: 20, fontSize: '0.7rem', fontWeight: 'bold' }}>{selectedNode.file}</span>
-            <span style={{ background: '#111', color: '#888', padding: '4px 12px', borderRadius: 20, fontSize: '0.7rem' }}>LINE {selectedNode.line}</span>
-          </div>
+          <h2 style={{ color: selectedNode.color, fontSize: '2.5rem', margin: '15px 0 10px 0', fontWeight: 900, lineHeight: 1 }}>{selectedNode.name}</h2>
+          <p style={{ margin: 0, color: '#8CBDF8', fontSize: '1rem', fontWeight: 'bold' }}>{selectedNode.file.toUpperCase()}</p>
           
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15, margin: '20px 0' }}>
-            <div style={{ background: '#08080a', padding: 15, borderRadius: 12, border: '1px solid #15151a' }}>
-              <div style={{ fontSize: '0.65rem', color: '#555', marginBottom: 5 }}>LEAD AUTHOR</div>
-              <div style={{ fontWeight: 'bold', fontSize: '1rem' }}>{selectedNode.author}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15, margin: '40px 0' }}>
+            <div style={{ background: '#0a0a0f', padding: 20, borderRadius: 8, border: '1px solid #1a1a25', borderLeft: '4px solid ' + selectedNode.color }}>
+              <div style={{ fontSize: '0.65rem', color: '#6E55D7', marginBottom: 5, letterSpacing: 1 }}>OWNER</div>
+              <div style={{ fontWeight: 900, fontSize: '1.2rem' }}>{selectedNode.author}</div>
             </div>
-            <div style={{ background: '#08080a', padding: 15, borderRadius: 12, border: '1px solid #15151a' }}>
-              <div style={{ fontSize: '0.65rem', color: '#555', marginBottom: 5 }}>MODIFICATION CHURN</div>
-              <div style={{ fontWeight: 'bold', fontSize: '1rem', color: selectedNode.churnScore > 70 ? '#ff0033' : '#00ffcc' }}>{selectedNode.churnScore}%</div>
+            <div style={{ background: '#0a0a0f', padding: 20, borderRadius: 8, border: '1px solid #1a1a25', borderLeft: '4px solid ' + (selectedNode.churnScore > 70 ? '#FF5BD3' : '#7EF0C1') }}>
+              <div style={{ fontSize: '0.65rem', color: '#6E55D7', marginBottom: 5, letterSpacing: 1 }}>STABILITY</div>
+              <div style={{ fontWeight: 900, fontSize: '1.2rem', color: selectedNode.churnScore > 70 ? '#FF5BD3' : '#7EF0C1' }}>{100 - selectedNode.churnScore}%</div>
             </div>
           </div>
 
-          <div style={{ marginTop: 30 }}>
-            <h4 style={{ color: '#444', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: 2, marginBottom: 15 }}>C# Implementation</h4>
+          <div style={{ marginTop: 40 }}>
+            <h4 style={{ color: '#6E55D7', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: 3, marginBottom: 15 }}>C# Source</h4>
             <pre style={{ 
-              background: '#000', padding: 25, borderRadius: 15, fontSize: '0.85rem', 
-              overflowX: 'auto', border: '1px solid #111', color: '#ccc', lineWeight: 1.6,
-              boxShadow: 'inset 0 0 20px rgba(0,0,0,1)'
+              background: '#000', padding: 25, borderRadius: 10, fontSize: '0.85rem', 
+              overflowX: 'auto', border: '1px solid #111', color: '#ccc', lineHeight: 1.7
             }}>
-              <code style={{ fontFamily: 'Fira Code, monospace' }}>{selectedNode.snippet}</code>
+              <code>{selectedNode.snippet}</code>
             </pre>
           </div>
-
-          {selectedNode.isGodObject && (
-            <div style={{ marginTop: 30, padding: 20, background: 'rgba(255,0,85,0.05)', borderLeft: '4px solid #ff0055', borderRadius: 8 }}>
-              <h4 style={{ margin: '0 0 10px 0', color: '#ff0055', fontSize: '0.8rem' }}>⚠️ ARCHITECTURAL DEBT</h4>
-              <p style={{ margin: 0, fontSize: '0.9rem', opacity: 0.8 }}>This function acts as a <b>God Object</b>. It has {selectedNode.outDegree} outbound dependencies, making it a critical point of failure.</p>
-            </div>
-          )}
         </div>
       )}
     </div>
