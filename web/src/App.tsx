@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import ForceGraph3D from 'react-force-graph-3d';
 import * as THREE from 'three';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 interface Node {
   id: string;
@@ -12,11 +13,14 @@ interface Node {
   author: string;
   lastModified: string;
   churnScore: number;
+  painScore: number;
+  issues: string[];
   inDegree: number;
   outDegree: number;
   isGodObject: boolean;
   isDeadCode: boolean;
-  stellarColor?: string;
+  color?: string;
+  outerColor?: string; 
   size?: number; 
 }
 
@@ -30,21 +34,23 @@ interface GraphData {
   links: Link[];
 }
 
-// ULTRA-SATURATED STELLAR PALETTE
+type ViewMode = 'GALAXY' | 'HEATMAP' | 'BLAST' | 'DEBT';
+
+// Realistic yet VIVID Stellar Palette (O-B-A-F-G-K-M)
 const STELLAR_PAIRS = [
-  { inner: '#0044ff', outer: '#0022aa' }, // Class O: Deep Sapphire
-  { inner: '#00d4ff', outer: '#0088ff' }, // Class B: Electric Cyan
-  { inner: '#ffffff', outer: '#cae1ff' }, // Class A: Brilliant White
-  { inner: '#ffee00', outer: '#ffaa00' }, // Class F/G: Solar Gold
-  { inner: '#ff8800', outer: '#ff4400' }, // Class K: Plasma Orange
-  { inner: '#f0f0f0', outer: '#a0a0a0' }, // Class M: Moonlight Silver (Changed from Magma Red)
-  { inner: '#bd00ff', outer: '#7000ff' }  // Bonus: Pulsar Purple
+  { inner: '#ffffff', outer: '#9bb0ff' }, // Class O: Deep Sapphire
+  { inner: '#cae1ff', outer: '#0077ff' }, // Class B: Blue-White
+  { inner: '#f8f7ff', outer: '#ffffff' }, // Class A: Pure White
+  { inner: '#fff4ea', outer: '#ffee00' }, // Class F/G: Solar Gold
+  { inner: '#ffd2a1', outer: '#ff8800' }, // Class K: Plasma Orange
+  { inner: '#ffcc6f', outer: '#ff3300' }, // Class M: Red
+  { inner: '#ff55aa', outer: '#7000ff' }  // Bonus: Cyber Nebula
 ];
 
 const textureCache: Record<string, THREE.CanvasTexture> = {};
 
 const getMasterNodeTexture = (inner: string, outer: string, churn: number, isGod: boolean, isDead: boolean) => {
-  const cacheKey = `${inner}_${outer}_${churn}_${isGod}_${isDead}_v66`;
+  const cacheKey = `${inner}_${outer}_${churn}_${isGod}_${isDead}_v70`;
   if (textureCache[cacheKey]) return textureCache[cacheKey];
 
   const canvas = document.createElement('canvas');
@@ -104,7 +110,14 @@ const getMasterNodeTexture = (inner: string, outer: string, churn: number, isGod
 export default function App() {
   const [data, setData] = useState<GraphData | null>(null);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('GALAXY');
   const [impactNodes, setImpactNodes] = useState<Set<string>>(new Set());
+  
+  // Auto-Fix States
+  const [apiKey, setApiKey] = useState<string>(localStorage.getItem('GEMINI_API_KEY') || '');
+  const [showSettings, setShowSettings] = useState(false);
+  const [isFixing, setIsFixing] = useState(false);
+  const [fixedCode, setFixedCode] = useState<string | null>(null);
   
   const fgRef = useRef<any>();
 
@@ -147,6 +160,8 @@ export default function App() {
 
   const handleNodeClick = useCallback((node: any) => {
     setSelectedNode(node);
+    setFixedCode(null); // Reset fix state when changing node
+    
     const impacted = new Set<string>();
     data?.links.forEach((l: any) => {
       const targetId = typeof l.target === 'object' ? l.target.id : l.target;
@@ -163,6 +178,50 @@ export default function App() {
       1500
     );
   }, [data]);
+
+  const requestAutoFix = async () => {
+      if (!apiKey) {
+          setShowSettings(true);
+          return;
+      }
+      if (!selectedNode) return;
+
+      setIsFixing(true);
+      setFixedCode("🧠 Analyzing code and formulating refactor plan...");
+
+      try {
+          const genAI = new GoogleGenerativeAI(apiKey);
+          const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+          
+          const prompt = `
+          You are an expert Software Architect.
+          Task: Refactor the following C# code to resolve its architectural debt.
+          
+          Issues Detected:
+          ${selectedNode.issues.join('\n')}
+          
+          Current Code:
+          \`\`\`csharp
+          ${selectedNode.snippet}
+          \`\`\`
+          
+          Provide the optimized, refactored C# code. If it's a God Object, show how it should be split into smaller methods or classes. If it's dead code, state that it should be removed.
+          `;
+
+          const result = await model.generateContent(prompt);
+          setFixedCode(result.response.text());
+      } catch (err: any) {
+          setFixedCode(`❌ Error generating fix: ${err.message}. Check your API Key.`);
+      } finally {
+          setIsFixing(false);
+      }
+  };
+
+  const saveApiKey = (key: string) => {
+    setApiKey(key);
+    localStorage.setItem('GEMINI_API_KEY', key);
+    setShowSettings(false);
+  };
 
   const nodeThreeObject = useCallback((node: any) => {
     const isImpacted = impactNodes.has(node.id);
@@ -185,7 +244,7 @@ export default function App() {
     return sprite;
   }, [selectedNode, impactNodes]);
 
-  if (!data) return <div style={{ color: 'white', padding: 40, fontFamily: 'monospace' }}>🛰️ CALIBRATING STELLAR CORONA...</div>;
+  if (!data) return <div style={{ color: 'white', padding: 40, fontFamily: 'monospace' }}>🛰️ CALIBRATING ACTIONABLE MAP...</div>;
 
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative', background: '#000002', overflow: 'hidden' }}>
@@ -194,8 +253,12 @@ export default function App() {
         graphData={data}
         nodeLabel={(node: any) => `
           <div style="background:rgba(0,0,0,0.95); padding:15px; border-radius:8px; border:1px solid ${node.outerColor}; color:white; font-family:'Segoe UI', sans-serif;">
-            <b style="color:${node.outerColor}">${node.name}</b><br/>
-            <span style="opacity:0.6">${node.file}</span>
+            <b style="color:${node.outerColor}; font-size:1.2rem;">${node.name}</b><br/>
+            <span style="opacity:0.6; font-size:0.85rem;">${node.file}</span><br/>
+            <div style="height:1px; background:#333; margin:8px 0;"></div>
+            <div style="color:${node.painScore > 5000 ? '#ff4444' : '#fff'}; font-size:0.8rem;">
+              PAIN SCORE: <b>${Math.round(node.painScore || 0).toLocaleString()}</b>
+            </div>
           </div>
         `}
         nodeThreeObject={nodeThreeObject}
@@ -211,14 +274,67 @@ export default function App() {
 
       <div style={{ position: 'absolute', top: 40, left: 40, pointerEvents: 'none', borderLeft: '5px solid white', paddingLeft: 30 }}>
         <h1 style={{ margin: 0, fontSize: '3rem', color: '#fff', letterSpacing: 12, fontWeight: 900, textTransform: 'uppercase' }}>REPO GAZER</h1>
-        <div style={{ color: '#00fbff', fontSize: '0.9rem', fontWeight: 900, letterSpacing: 5, marginTop: 10 }}>DEEP SPACE CORONA v6.6</div>
+        <div style={{ color: '#00fbff', fontSize: '0.9rem', fontWeight: 900, letterSpacing: 5, marginTop: 10 }}>ACTIONABLE PROFILER v7.0</div>
+        
+        <button 
+          onClick={() => setShowSettings(true)}
+          style={{ pointerEvents: 'auto', background: 'none', border: '1px solid #444', color: '#888', padding: '5px 10px', borderRadius: 4, marginTop: 15, cursor: 'pointer', fontSize: '0.7rem' }}
+        >⚙ CONFIG API KEY</button>
       </div>
 
+      {/* Settings Modal */}
+      {showSettings && (
+        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: '#111', padding: 30, borderRadius: 12, border: '1px solid #333', zIndex: 1000, width: 400 }}>
+          <h3 style={{ color: '#00d4ff', marginTop: 0 }}>Auto-Fix Configuration</h3>
+          <p style={{ color: '#888', fontSize: '0.8rem' }}>Enter Gemini API Key to enable AI Auto-Refactoring. (Stored locally)</p>
+          <input 
+            type="password" 
+            placeholder="AIza..." 
+            defaultValue={apiKey}
+            id="apiKeyInput"
+            style={{ width: '100%', padding: 10, background: '#000', border: '1px solid #444', color: '#fff', borderRadius: 5, marginBottom: 20 }}
+          />
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={() => saveApiKey((document.getElementById('apiKeyInput') as HTMLInputElement).value)} style={{ flex: 1, padding: 10, background: '#00d4ff', border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: 'bold' }}>SAVE KEY</button>
+            <button onClick={() => setShowSettings(false)} style={{ flex: 1, padding: 10, background: '#333', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer' }}>CANCEL</button>
+          </div>
+        </div>
+      )}
+
+      {/* Mode Switcher */}
+      <div style={{ 
+        position: 'absolute', bottom: 40, left: '50%', transform: 'translateX(-50%)',
+        display: 'flex', gap: 15, background: 'rgba(10, 10, 15, 0.95)', padding: '12px 25px', 
+        borderRadius: 15, border: '1px solid #333', backdropFilter: 'blur(15px)'
+      }}>
+        {[
+          { id: 'GALAXY', label: '구조 (STRUCTURE)' },
+          { id: 'HEATMAP', label: '위험도 (RISK)' },
+          { id: 'BLAST', label: '파급력 (IMPACT)' },
+          { id: 'DEBT', label: '부채 (DEBT)' }
+        ].map(mode => (
+          <button 
+            key={mode.id}
+            onClick={() => setViewMode(mode.id as ViewMode)}
+            style={{
+              padding: '10px 25px', borderRadius: 8, border: 'none', cursor: 'pointer',
+              fontWeight: 900, fontSize: '0.85rem', letterSpacing: 2,
+              background: viewMode === mode.id ? 'white' : 'transparent',
+              color: viewMode === mode.id ? 'black' : '#888',
+              transition: 'all 0.3s ease'
+            }}
+          >
+            {mode.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Actionable Sidebar */}
       {selectedNode && (
         <div style={{ 
-          position: 'absolute', right: 0, top: 0, bottom: 0, width: 500, 
+          position: 'absolute', right: 0, top: 0, bottom: 0, width: 550, 
           background: 'rgba(5, 5, 10, 1.0)', borderLeft: '1px solid #333', 
-          padding: 60, overflowY: 'auto', color: '#fff', zIndex: 100,
+          padding: 50, overflowY: 'auto', color: '#fff', zIndex: 100,
           boxShadow: '-50px 0 100px rgba(0,0,0,1)'
         }}>
           <button onClick={() => setSelectedNode(null)} style={{ float: 'right', background: 'none', border: 'none', color: '#444', cursor: 'pointer', fontSize: 40 }}>✕</button>
@@ -226,36 +342,62 @@ export default function App() {
           <h2 style={{ color: selectedNode.outerColor, fontSize: '3rem', margin: '15px 0 10px 0', fontWeight: 900 }}>{selectedNode.name}</h2>
           <p style={{ margin: 0, color: '#666', fontSize: '1rem', fontWeight: 'bold' }}>SOURCE: {selectedNode.file.toUpperCase()}</p>
           
-          <div style={{ marginTop: 50, display: 'grid', gridTemplateColumns: '1fr', gap: 20 }}>
-            <div style={{ background: '#0a0a0f', padding: 25, borderLeft: '4px solid ' + selectedNode.outerColor }}>
-              <div style={{ fontSize: '0.7rem', color: '#444', marginBottom: 10, letterSpacing: 2 }}>CORE OWNER</div>
-              <div style={{ fontWeight: 900, fontSize: '1.4rem' }}>{selectedNode.author.toUpperCase()}</div>
+          {/* Actionable Metrics */}
+          <div style={{ marginTop: 40, display: 'grid', gridTemplateColumns: '1fr', gap: 15 }}>
+            <div style={{ background: '#0a0a0f', padding: 20, borderLeft: '4px solid ' + selectedNode.outerColor }}>
+              <div style={{ fontSize: '0.7rem', color: '#888', marginBottom: 5, letterSpacing: 2 }}>PAIN SCORE (Complexity × Churn)</div>
+              <div style={{ fontWeight: 900, fontSize: '1.8rem', color: selectedNode.painScore > 5000 ? '#ff0000' : '#fff' }}>
+                {Math.round(selectedNode.painScore || 0).toLocaleString()}
+              </div>
             </div>
 
-            <div style={{ background: '#1a0505', padding: 25, borderLeft: '4px solid #ff0000' }}>
-              <div style={{ fontSize: '0.7rem', color: '#ff6666', marginBottom: 10, letterSpacing: 2 }}>GRAVITATIONAL IMPACT</div>
-              <div style={{ fontWeight: 900, fontSize: '1.4rem' }}>{impactNodes.size} Dependent Components</div>
-            </div>
-
-            {(selectedNode.isGodObject || selectedNode.isDeadCode) && (
-              <div style={{ background: 'rgba(255,204,0,0.05)', padding: 25, borderLeft: '4px solid #ffcc00' }}>
-                <div style={{ fontSize: '0.7rem', color: '#ffcc00', marginBottom: 10, letterSpacing: 2 }}>SYSTEM DIAGNOSIS</div>
-                <div style={{ fontWeight: 900, fontSize: '1.1rem' }}>
-                    {selectedNode.isGodObject ? '⚠️ GOD OBJECT (Split Required)' : '🗑️ DEAD CODE (Delete Safe)'}
-                </div>
+            {selectedNode.issues && selectedNode.issues.length > 0 && (
+              <div style={{ background: '#1a0505', padding: 20, borderLeft: '4px solid #ff0000' }}>
+                <div style={{ fontSize: '0.7rem', color: '#ff6666', marginBottom: 10, letterSpacing: 2 }}>ACTIONABLE DIAGNOSIS</div>
+                <ul style={{ margin: 0, paddingLeft: 20, fontSize: '0.9rem', color: '#ffaaaa', lineHeight: 1.5 }}>
+                  {selectedNode.issues.map((issue, idx) => (
+                    <li key={idx} style={{ marginBottom: 5 }}>{issue}</li>
+                  ))}
+                </ul>
+                
+                {/* THE KILLING POINT: Auto-Fix Button */}
+                <button 
+                  onClick={requestAutoFix}
+                  disabled={isFixing}
+                  style={{
+                    width: '100%', marginTop: 20, padding: 15, background: 'linear-gradient(90deg, #ff0055, #ffaa00)',
+                    border: 'none', borderRadius: 6, color: 'white', fontWeight: 900, cursor: 'pointer',
+                    boxShadow: '0 0 20px rgba(255, 0, 85, 0.4)', opacity: isFixing ? 0.5 : 1
+                  }}
+                >
+                  {isFixing ? '⚙️ AI IS REFACTORING...' : '✨ ONE-CLICK AUTO-FIX (GEMINI)'}
+                </button>
               </div>
             )}
           </div>
 
-          <div style={{ marginTop: 50 }}>
-            <h4 style={{ color: '#222', textTransform: 'uppercase', fontSize: '0.8rem', letterSpacing: 4, marginBottom: 20 }}>C# Source</h4>
+          <div style={{ marginTop: 40 }}>
+            <h4 style={{ color: '#222', textTransform: 'uppercase', fontSize: '0.8rem', letterSpacing: 4, marginBottom: 15 }}>Current C# Source</h4>
             <pre style={{ 
-              background: '#000', padding: 35, borderRadius: 2, fontSize: '0.9rem', 
-              overflowX: 'auto', border: '1px solid #111', color: '#aaa', lineHeight: 1.8
+              background: '#000', padding: 30, borderRadius: 2, fontSize: '0.85rem', 
+              overflowX: 'auto', border: '1px solid #111', color: '#aaa', lineHeight: 1.6
             }}>
               <code>{selectedNode.snippet}</code>
             </pre>
           </div>
+
+          {fixedCode && (
+            <div style={{ marginTop: 30 }}>
+              <h4 style={{ color: '#00d4ff', textTransform: 'uppercase', fontSize: '0.8rem', letterSpacing: 4, marginBottom: 15 }}>AI Proposed Refactor</h4>
+              <div style={{ 
+                background: 'rgba(0, 212, 255, 0.05)', padding: 30, borderRadius: 2, fontSize: '0.85rem', 
+                border: '1px solid rgba(0, 212, 255, 0.3)', color: '#fff', lineHeight: 1.6,
+                whiteSpace: 'pre-wrap'
+              }}>
+                {fixedCode}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
