@@ -42,6 +42,20 @@ export async function extractNodes(files, rootPath, isGitRepo) {
         
         const blame = await getBlameInfo(rootPath, file, m.start, endLine, isGitRepo);
 
+        // Extract namespace from file content
+        let namespace_ = "";
+        for (const l of lines) {
+          const nsMatch = /namespace\s+([\w.]+)/.exec(l);
+          if (nsMatch) { namespace_ = nsMatch[1]; break; }
+        }
+
+        // Determine node type
+        let nodeType = "method";
+        if (m.name === m.className) nodeType = "constructor";
+        else if (m.snippet.includes("class ")) nodeType = "class";
+        else if (m.snippet.includes("interface ")) nodeType = "interface";
+        else if (m.snippet.includes("get ") || m.snippet.includes("set ")) nodeType = "property";
+
         const id = `${relativeFile}:${m.className}.${m.name}`;
         const nodeInfo = {
           id,
@@ -56,7 +70,9 @@ export async function extractNodes(files, rootPath, isGitRepo) {
           inDegree: 0,
           outDegree: 0,
           isGodObject: false,
-          isDeadCode: false
+          isDeadCode: false,
+          namespace: namespace_,
+          type: nodeType
         };
         
         nodes.push(nodeInfo);

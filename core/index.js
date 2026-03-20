@@ -37,8 +37,17 @@ async function main() {
   console.log("🔎 Scanning for Technical Debt (God Objects & Dead Code)...");
   nodes = calculateTechDebt(nodes, links);
 
-  // 6. Output Generation
-  const result = { nodes, links };
+  // 6. Output Generation with metadata
+  const languages = [...new Set(files.map(f => f.split('.').pop()))];
+  const metadata = {
+    projectName: path.basename(rootPath),
+    analyzedAt: new Date().toISOString(),
+    totalNodes: nodes.length,
+    totalLinks: links.length,
+    languages
+  };
+
+  const result = { metadata, nodes, links };
   const outputPath = path.join(process.cwd(), 'project_data.json');
   fs.writeFileSync(outputPath, JSON.stringify(result, null, 2));
 
