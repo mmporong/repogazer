@@ -1,62 +1,64 @@
-# 🚀 RepoGazer 8.1 Global Marketing Assets
+# 🚀 RepoGazer 8.1: Shared like a human, not a bot.
 
-Use these pre-written templates to launch RepoGazer on global developer communities. **Always attach the high-res galaxy screenshot (Gomyammi project)** for maximum impact.
-
----
-
-## 1. Reddit (Recommended subreddits: r/programming, r/dataisbeautiful, r/unity3d)
-
-### **Title Options:**
-- I built a 3D Galaxy Engine to visualize the 'Architectural Soul' of your codebase.
-- My code as a Universe: I built an engine that finds architectural 'cancer' in 3D.
-- Tired of messy spaghetti code? I built a 3D scanner that finds circular dependencies as red-glowing stars.
-
-### **Body Copy:**
-"Hi everyone, 
-
-I’ve always felt that modern software architecture is too complex to be understood through flat 2D diagrams. So, I built **RepoGazer** — a tool that transforms your repository into a 3D interactive galaxy.
-
-**What it does:**
-- 🔴 **Circular Dependency Detection**: Loops glow in red.
-- 🟣 **Code Clone Identification**: Identical logic is linked by purple filaments.
-- 🔎 **Pain Score Metrics**: Stars glow based on `Complexity × Git Churn`.
-
-I just ran this on a massive 5,000-file project (Gomyammi), and the result was this stunning star cluster. It helped me find tech debt I never knew existed.
-
-It's open-source and I’m not looking for profit — just wanted to share this with fellow architects and performance geeks.
-
-**Check it out here:** [Insert your GitHub Link]"
+Use these templates to talk about RepoGazer. I've toned down the "AI marketing" fluff so you sound like an actual engineer sharing a cool project.
 
 ---
 
-## 2. Twitter / X (Tag: @mrdoob, @levelsio, @iam_vveb)
+## 1. Reddit (r/programming, r/dataisbeautiful, r/unity3d)
 
-### **Copy Option 1 (The Visual Hook):**
-Your code is not just text; it's a universe. 🌌
+### **Title Options (Keep it punchy):**
+- I got tired of messy architecture, so I built a 3D Galaxy Engine to find circular dependencies.
+- Visualizing 5,000 code files in 3D actually helped me find tech debt I missed for months.
+- My codebase as a interactive universe. Built this to spot architectural "cancer" visually.
 
-I built RepoGazer 8.1 to diagnose architectural health in 3D.
-- Red Stars = Circular Dependencies
-- Purple Filaments = Code Clones
-- Brightness = High Tech Debt
+### **Body Copy (The "Developer-to-Developer" vibe):**
+"Hey guys, 
 
-Built with #ThreeJS and #GeminiAI. 💎
-[GitHub Link] #OpenSource #Architecture
+I’ve spent way too much time staring at flat 2D diagrams that don’t actually tell me anything about my system's health. I wanted something that felt more... intuitive.
 
-### **Copy Option 2 (The Diagnostic Hook):**
-Stop managing code. Start ruling your Galaxy. 🛰️
+So I spent my nights building **RepoGazer**. It basically treats your codebase as a physical universe. Every star is a function or class, and the gravity represents dependencies.
 
-RepoGazer 8.1 uses a custom 3D engine to find "Architectural Cancer" in seconds. Scalable up to 1M+ lines of code.
+**What I actually use it for:**
+- Finding **Circular Dependencies**: If a cluster is glowing red, I know I've messed up the imports.
+- Spotting **Code Clones**: It links identical logic with purple filaments. Seeing it in 3D makes it obvious where I need to refactor.
+- **Pain Score**: It calculates `Complexity × Git Churn`. The brightest stars are usually the files that keep me up at night.
 
-Check your project's soul: [GitHub Link]
-#SoftwareEngineering #DeveloperTools #DataViz
+I just ran it on a huge project with 5,000 files, and honestly, the visual cluster was eye-opening. 
+
+It’s completely open-source. No hidden SaaS, no tracking. Just a tool for people who care about architecture and cool viz.
+
+**GitHub:** [Insert Link]
+**Demo (Best on Desktop):** [Insert Vercel Link]"
 
 ---
 
-## 💡 Pro Tips for Launch:
+## 2. Twitter / X (Short, sharp, and visual)
 
-1. **The Hero Image**: Use the screenshot of the **Gomyammi** project (the one with yellow and blue clusters). It’s the most visually dense and impressive.
-2. **Live Demo**: If you can, host the `web` folder on Vercel/Netlify and include the link. Developers love to "play" before they "clone".
-3. **Show, Don't Just Tell**: If someone asks "Does it support Python?", reply with a screenshot of a Python repo analyzed by RepoGazer.
+### **Copy Option 1 (The "Wait, what?" hook):**
+Your code is more than just text. It’s a universe. 🌌
 
-**Launch Time!** 🌠
-Check the stars and let the world see your architecture.
+I built RepoGazer to find architectural rot in 3D.
+🔴 Red = Circular loops
+🟣 Purple = Copy-paste clones
+✨ Brightness = Files that actually need refactoring
+
+Open source and built with #ThreeJS. 
+[GitHub Link] #coding #architecture
+
+### **Copy Option 2 (The "Productivity" hook):**
+Stop managing messy code. Start ruling your Galaxy. 🛰️
+
+RepoGazer 8.1 finds "Architectural Cancer" in seconds using a 3D engine. Scalable even for 1M+ lines. 
+
+Take a look: [GitHub Link]
+#SoftwareEngineering #DataViz #React
+
+---
+
+## 💡 Quick Tips for Posting:
+
+1. **The "Gomyammi" Screenshot**: Use that dense, colorful star cluster image. It looks way more impressive than a simple repo.
+2. **Be ready for the "Why?"**: When someone asks "Why not just use a 2D graph?", just say "Because 3D shows the density and gravity of dependencies in a way 2D simply can't."
+3. **Reply to comments**: If someone likes it, tell them which language they should try it on first.
+
+Let's go. 🌠
