@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "public": true,
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "framework": "vite",
+  "rootDirectory": "web"
+}
