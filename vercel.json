@@ -1,7 +1,6 @@
 {
   "version": 2,
-  "public": true,
-  "buildCommand": "cd web && npm install && npx vite build",
-  "installCommand": "npm install",
+  "buildCommand": "npm install --prefix web && npm run build --prefix web",
+  "outputDirectory": "web/dist",
   "framework": "vite"
 }
