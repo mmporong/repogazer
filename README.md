@@ -2,7 +2,10 @@
 
 > **"Stop reading code. Start diagnosing its architectural soul."**
 
-RepoGazer is not just another visualization tool. It is a **Next-Gen 3D Galaxy Engine** that transforms your complex codebase into a vivid, interactive universe. Every function, class, and module becomes a "Stellar Unit," revealing the structural health, hidden risks, and evolutionary patterns of your software through a cinematic lens.
+### 🔗 [Live Demo: Explore your Galaxy now!](https://repogazer.vercel.app)
+*(Note: If the URL above is different, please update it to your actual Vercel deployment URL)*
+
+![RepoGazer Galaxy Showcase](https://raw.githubusercontent.com/mmporong/repogazer/master/showcase.png)
 
 ---
 
