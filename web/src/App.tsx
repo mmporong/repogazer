@@ -112,7 +112,7 @@ export default function App() {
   const [filter, setFilter] = useState<'ALL' | 'CYCLE' | 'CLONE' | 'DEBT'>('ALL');
   const [impactNodes, setImpactNodes] = useState<Set<string>>(new Set());
   
-  const fgRef = useRef<any>();
+  const fgRef = useRef<any>(null);
 
   useEffect(() => {
     fetch('/project_data.json')
