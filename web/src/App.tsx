@@ -234,10 +234,10 @@ export default function App() {
         {/* Diagnostic Filters */}
         <div style={{ marginTop: 30, display: 'flex', gap: 10, pointerEvents: 'auto' }}>
           {[
-            { id: 'ALL', label: '전체 (ALL)', color: '#888' },
-            { id: 'CYCLE', label: '순환참조 (CYCLES)', color: '#ff0000' },
-            { id: 'CLONE', label: '코드중복 (CLONES)', color: '#bd00ff' },
-            { id: 'DEBT', label: '기술부채 (DEBT)', color: '#ffcc00' }
+            { id: 'ALL', label: 'ALL', color: '#888' },
+            { id: 'CYCLE', label: 'CYCLES', color: '#ff0000' },
+            { id: 'CLONE', label: 'CLONES', color: '#bd00ff' },
+            { id: 'DEBT', label: 'TECH DEBT', color: '#ffcc00' }
           ].map(f => (
             <button key={f.id} onClick={() => setFilter(f.id as any)} style={{
               background: filter === f.id ? f.color : '#111',
