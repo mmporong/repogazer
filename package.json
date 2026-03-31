@@ -1,9 +1,11 @@
 {
   "name": "repogazer",
-  "version": "8.1.0",
+  "version": "8.1.6",
   "description": "3D Galaxy Architectural Intelligence Engine for Code Analysis. Visualize Circular Dependencies, Tech Debt, and Git Churn as a stunning stellar system.",
   "main": "core/index.js",
   "scripts": {
+    "build": "cd web && npm install && npx vite build",
+    "install": "cd web && npm install",
     "parse": "node core/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -25,7 +27,8 @@
     "glob": "^13.0.6",
     "simple-git": "^3.33.0",
     "typescript": "^5.9.3",
-    "web-tree-sitter": "^0.26.7"
+    "web-tree-sitter": "^0.26.7",
+    "vite": "^6.2.0"
   },
   "repository": {
     "type": "git",
