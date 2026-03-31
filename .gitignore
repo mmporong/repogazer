@@ -26,3 +26,5 @@ Thumbs.db
 # Project Specific
 project_data.json
 web/dist/
+package-lock.json
+**/package-lock.json
