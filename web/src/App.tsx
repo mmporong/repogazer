@@ -168,26 +168,32 @@ export default function App() {
 
   const nodeThreeObject = useCallback((node: any) => {
     let opacity = 1.0;
+    const isFocused = selectedNode && (selectedNode.id === node.id || impactNodes.has(node.id));
+    const isImportant = node.isCircular || node.cloneIds.length > 0 || node.inDegree > 10;
     
     // Filter logic
-    if (filter === 'CYCLE' && !node.isCircular) opacity = 0.05;
-    if (filter === 'CLONE' && node.cloneIds.length === 0) opacity = 0.05;
-    if (filter === 'DEBT' && !node.isGodObject && !node.isDeadCode) opacity = 0.05;
+    if (filter === 'CYCLE' && !node.isCircular) opacity = 0.01;
+    if (filter === 'CLONE' && node.cloneIds.length === 0) opacity = 0.01;
+    if (filter === 'DEBT' && !node.isGodObject && !node.isDeadCode) opacity = 0.01;
 
-    // Selection highlight
-    if (selectedNode && selectedNode.id !== node.id && !impactNodes.has(node.id)) opacity *= 0.1;
+    // Fade out non-selected stars
+    if (selectedNode && !isFocused) opacity *= 0.05;
 
+    // BACK TO BEAUTIFUL SPRITES (The Glow)
     const material = new THREE.SpriteMaterial({
       map: getMasterNodeTexture(node.color!, node.outerColor!, node.churnScore, node.isCircular, node.cloneIds.length > 0),
-      color: 0xffffff,
       transparent: true,
       opacity: opacity,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.AdditiveBlending, // Key for beautiful "glow" mixing
       depthWrite: false 
     });
     
     const sprite = new THREE.Sprite(material);
-    sprite.scale.set(node.size!, node.size!, 1);
+    
+    // Scale logic: Important nodes are bigger and "brighter"
+    const scale = node.size * (isImportant ? 1.2 : 0.8);
+    sprite.scale.set(scale, scale, 1);
+    
     return sprite;
   }, [filter, selectedNode, impactNodes]);
 
@@ -206,13 +212,18 @@ export default function App() {
         `}
         nodeThreeObject={nodeThreeObject}
         onNodeClick={handleNodeClick}
-        linkDirectionalArrowLength={4}
+        
+        // --- PERFORMANCE OPTIMIZATIONS ---
+        warmupTicks={100} // Pre-calculate physics before first render
+        cooldownTicks={200} // Stop simulation after some time to save CPU
+        linkDirectionalArrowLength={2} // Reduced arrow size
         linkDirectionalArrowRelPos={1}
-        linkColor={() => 'rgba(255, 255, 255, 0.03)'} 
-        linkWidth={0.5}
+        linkColor={() => 'rgba(255, 255, 255, 0.02)'} // More transparent for large graphs
+        linkWidth={0.3} // Thinner links
         backgroundColor="#000005"
-        d3AlphaDecay={0.01}
-        d3VelocityDecay={0.2}
+        d3AlphaDecay={0.02} // Faster stabilization
+        d3VelocityDecay={0.3} 
+        enablePointerInteraction={true} // Keep interactive but lightweight
       />
 
       {/* Control HUD */}
@@ -241,47 +252,103 @@ export default function App() {
       {selectedNode && (
         <div style={{ 
           position: 'absolute', right: 0, top: 0, bottom: 0, width: 550, 
-          background: 'rgba(5, 5, 10, 1.0)', borderLeft: '1px solid #333', 
-          padding: 60, overflowY: 'auto', color: '#fff', zIndex: 100,
-          boxShadow: '-50px 0 100px rgba(0,0,0,1)'
+          background: 'rgba(5, 5, 10, 0.98)', borderLeft: '1px solid #333', 
+          padding: '40px 50px', overflowY: 'auto', color: '#fff', zIndex: 100,
+          boxShadow: '-50px 0 100px rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)'
         }}>
-          <button onClick={() => setSelectedNode(null)} style={{ float: 'right', background: 'none', border: 'none', color: '#444', cursor: 'pointer', fontSize: 40 }}>✕</button>
+          <button onClick={() => setSelectedNode(null)} style={{ float: 'right', background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: 30, padding: 0, marginTop: '-10px' }}>✕</button>
           
-          <h2 style={{ color: selectedNode.outerColor, fontSize: '3rem', margin: '15px 0 10px 0', fontWeight: 900 }}>{selectedNode.name}</h2>
-          <p style={{ margin: 0, color: '#666', fontSize: '1rem', fontWeight: 'bold' }}>SOURCE: {selectedNode.file.toUpperCase()}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+            <span style={{ background: '#222', padding: '4px 8px', borderRadius: 4, fontSize: '0.7rem', fontWeight: 'bold', color: '#aaa', letterSpacing: 1 }}>NODE</span>
+            <span style={{ color: '#888', fontSize: '0.85rem', fontFamily: 'monospace' }}>{selectedNode.file}</span>
+          </div>
+
+          <h2 style={{ 
+            color: selectedNode.outerColor || '#fff', 
+            fontSize: '1.8rem', 
+            margin: '0 0 30px 0', 
+            fontWeight: 900, 
+            wordBreak: 'break-all',
+            lineHeight: 1.2
+          }}>
+            {selectedNode.name}
+          </h2>
           
-          <div style={{ marginTop: 50 }}>
-            <h4 style={{ color: '#444', letterSpacing: 3, fontSize: '0.8rem' }}>ARCHITECTURAL DIAGNOSIS</h4>
-            <div style={{ marginTop: 20 }}>
+          {/* ARCHITECTURAL DIAGNOSIS */}
+          <div style={{ marginBottom: 40 }}>
+            <h4 style={{ color: '#666', letterSpacing: 3, fontSize: '0.75rem', marginBottom: 15, textTransform: 'uppercase' }}>Architectural Diagnosis</h4>
+            <div>
               {selectedNode.diagnostics && selectedNode.diagnostics.length > 0 ? (
-                selectedNode.diagnostics.map((d, i) => (
-                  <div key={i} style={{ padding: 25, background: '#110505', borderLeft: '4px solid #ff0000', marginBottom: 15, fontSize: '1rem', lineHeight: 1.7 }}>{d}</div>
-                ))
+                selectedNode.diagnostics.map((d, i) => {
+                  let bgColor = '#110505';
+                  let borderColor = '#ff0000';
+                  let icon = '⚠️';
+                  if (d.toLowerCase().includes('clone')) {
+                    bgColor = '#10051a';
+                    borderColor = '#bd00ff';
+                    icon = '❐';
+                  } else if (d.toLowerCase().includes('god') || d.toLowerCase().includes('debt')) {
+                    bgColor = '#1a1505';
+                    borderColor = '#ffaa00';
+                    icon = '🔥';
+                  }
+                  
+                  return (
+                    <div key={i} style={{ padding: 20, background: bgColor, borderLeft: `4px solid ${borderColor}`, marginBottom: 10, borderRadius: '0 4px 4px 0' }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                        <span style={{ fontSize: '1.2rem', marginTop: -2 }}>{icon}</span>
+                        <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#eee' }}>{d}</div>
+                      </div>
+                    </div>
+                  );
+                })
               ) : (
-                <div style={{ color: '#00ffcc', fontWeight: 'bold', fontSize: '1.1rem' }}>✅ HEALTHY COMPONENT</div>
+                <div style={{ padding: '15px 20px', background: '#051a10', borderLeft: '4px solid #00ffcc', color: '#00ffcc', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: '1.2rem' }}>✅</span> <b>HEALTHY COMPONENT</b>: No major architectural issues detected.
+                </div>
               )}
             </div>
           </div>
 
-          <div style={{ marginTop: 50, display: 'grid', gridTemplateColumns: '1fr', gap: 20 }}>
-            <div style={{ background: '#0a0a0f', padding: 30, borderLeft: '4px solid ' + selectedNode.outerColor }}>
-              <div style={{ fontSize: '0.7rem', color: '#444', marginBottom: 10, letterSpacing: 2 }}>PRIMARY OWNER</div>
-              <div style={{ fontWeight: 900, fontSize: '1.4rem' }}>{selectedNode.author.toUpperCase()}</div>
-            </div>
-            <div style={{ background: '#1a0505', padding: 30, borderLeft: '4px solid #ff0000' }}>
-              <div style={{ fontSize: '0.7rem', color: '#ff6666', marginBottom: 10, letterSpacing: 2 }}>IMPACT RADIUS</div>
-              <div style={{ fontWeight: 900, fontSize: '1.8rem' }}>{impactNodes.size} Dependent Modules</div>
+          {/* METRICS DASHBOARD */}
+          <div style={{ marginBottom: 40 }}>
+            <h4 style={{ color: '#666', letterSpacing: 3, fontSize: '0.75rem', marginBottom: 15, textTransform: 'uppercase' }}>Intelligence Metrics</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15 }}>
+              <div style={{ background: '#0a0a0f', padding: 20, borderRadius: 6, border: '1px solid #1a1a24' }}>
+                <div style={{ fontSize: '0.65rem', color: '#888', marginBottom: 8, letterSpacing: 1 }}>PRIMARY OWNER</div>
+                <div style={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#fff', wordBreak: 'break-all' }}>{selectedNode.author}</div>
+              </div>
+              <div style={{ background: '#1a0505', padding: 20, borderRadius: 6, border: '1px solid #2a0a0a' }}>
+                <div style={{ fontSize: '0.65rem', color: '#ff6666', marginBottom: 8, letterSpacing: 1 }}>IMPACT RADIUS</div>
+                <div style={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#ff9999' }}>{impactNodes.size} Dependencies</div>
+              </div>
+              <div style={{ background: '#0a0a0f', padding: 20, borderRadius: 6, border: '1px solid #1a1a24' }}>
+                <div style={{ fontSize: '0.65rem', color: '#888', marginBottom: 8, letterSpacing: 1 }}>VOLATILITY (CHURN)</div>
+                <div style={{ fontWeight: 'bold', fontSize: '1.1rem', color: selectedNode.churnScore > 70 ? '#ffaa00' : '#aaa' }}>{Math.round(selectedNode.churnScore)} Score</div>
+              </div>
+              <div style={{ background: '#0a0a0f', padding: 20, borderRadius: 6, border: '1px solid #1a1a24' }}>
+                <div style={{ fontSize: '0.65rem', color: '#888', marginBottom: 8, letterSpacing: 1 }}>COUPLING (IN / OUT)</div>
+                <div style={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#aaa' }}>{selectedNode.inDegree} / {selectedNode.outDegree}</div>
+              </div>
             </div>
           </div>
 
-          <div style={{ marginTop: 50 }}>
-            <h4 style={{ color: '#222', textTransform: 'uppercase', fontSize: '0.8rem', letterSpacing: 4, marginBottom: 20 }}>Source Implementation</h4>
-            <pre style={{ 
-              background: '#000', padding: 40, borderRadius: 2, fontSize: '0.9rem', 
-              overflowX: 'auto', border: '1px solid #111', color: '#aaa', lineHeight: 1.8
-            }}>
-              <code>{selectedNode.snippet}</code>
-            </pre>
+          {/* SOURCE IMPLEMENTATION */}
+          <div>
+            <h4 style={{ color: '#666', letterSpacing: 3, fontSize: '0.75rem', marginBottom: 15, textTransform: 'uppercase' }}>Source Implementation</h4>
+            <div style={{ background: '#050508', border: '1px solid #222', borderRadius: 6, overflow: 'hidden' }}>
+              <div style={{ padding: '8px 15px', background: '#111', borderBottom: '1px solid #222', fontSize: '0.75rem', color: '#666', display: 'flex', justifyContent: 'space-between' }}>
+                <span>Lines {selectedNode.line} - ...</span>
+                <span style={{ color: '#444' }}>C#</span>
+              </div>
+              <pre style={{ 
+                margin: 0, padding: 20, fontSize: '0.85rem', 
+                overflowX: 'auto', overflowY: 'auto', maxHeight: '300px', 
+                color: '#ddd', lineHeight: 1.6, fontFamily: "'Fira Code', 'Consolas', monospace"
+              }}>
+                <code>{selectedNode.snippet}</code>
+              </pre>
+            </div>
           </div>
         </div>
       )}

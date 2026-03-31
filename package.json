@@ -1,20 +1,34 @@
 {
   "name": "repogazer",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "version": "8.1.0",
+  "description": "3D Galaxy Architectural Intelligence Engine for Code Analysis. Visualize Circular Dependencies, Tech Debt, and Git Churn as a stunning stellar system.",
+  "main": "core/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "parse": "node core/index.js"
+    "parse": "node core/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "visualization",
+    "architecture",
+    "3d",
+    "threejs",
+    "circular-dependencies",
+    "tech-debt",
+    "code-analysis",
+    "static-analysis",
+    "git-churn"
+  ],
+  "author": "mmporong",
+  "license": "MIT",
   "type": "module",
   "dependencies": {
     "glob": "^13.0.6",
     "simple-git": "^3.33.0",
     "typescript": "^5.9.3",
     "web-tree-sitter": "^0.26.7"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mmporong/repogazer.git"
   }
 }
